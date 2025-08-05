@@ -5,4 +5,3 @@ joblib
 opencv-python
 face_recognition
 Pillow
-pip freeze > requirements.txt
