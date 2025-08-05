@@ -1,7 +1,7 @@
 streamlit
 pandas
 numpy
-joblib
-opencv-python
-face_recognition
+opencv-python-headless
 Pillow
+plotly
+joblib
