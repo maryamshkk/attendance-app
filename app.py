@@ -198,128 +198,6 @@ def authenticate(username, password):
     credentials = load_credentials()
     return username in credentials and credentials[username] == password
 
-# Face recognition integration
-RECOGNIZED_ID_FILE = os.path.join(os.path.dirname(BASE_DIR), 'face_recognition_app', 'shared', 'recognized_id.json')
-print(f"🔍 Streamlit JSON file path: {RECOGNIZED_ID_FILE}")
-
-def check_face_recognition():
-    """Check for new face recognition from JSON file - Auto-save detected IDs"""
-    try:
-        if os.path.exists(RECOGNIZED_ID_FILE):
-            if os.path.getsize(RECOGNIZED_ID_FILE) > 0:
-                with open(RECOGNIZED_ID_FILE, 'r') as f:
-                    data = json.load(f)
-                
-                emp_id = data.get('employee_id')
-                name = data.get('name')
-                unique_id = data.get('unique_id')
-                
-                if emp_id and unique_id:
-                    # Always mark attendance (allow multiple entries per day)
-                    if not name:
-                        # If name is missing, try to get it from employee data
-                        try:
-                            employee_df = load_employee_data()
-                            if employee_df is not None and not employee_df.empty:
-                                emp_row = employee_df[employee_df['Employee ID'] == emp_id]
-                                if not emp_row.empty:
-                                    name = emp_row['Name'].iloc[0]
-                        except Exception as e:
-                            print(f"Error getting employee name: {e}")
-                            name = f"Employee {emp_id}"
-                    
-                    success, message = mark_attendance(emp_id, name or f"Employee {emp_id}")
-                    if success:
-                        # Clear the JSON file after processing
-                        try:
-                            os.remove(RECOGNIZED_ID_FILE)
-                        except:
-                            pass
-                        return True, f"✅ Face Recognition: {name or emp_id} ({emp_id}) detected and marked!"
-                    else:
-                        return False, f"❌ Face Recognition: {message}"
-                else:
-                    return False, "❌ Face Recognition: Invalid data in JSON file"
-            else:
-                return False, "ℹ️ Face Recognition: No new detection data"
-        else:
-            return False, "ℹ️ Face Recognition: No detection file found"
-    except json.JSONDecodeError:
-        # Clear corrupted JSON file
-        try:
-            os.remove(RECOGNIZED_ID_FILE)
-        except:
-            pass
-        return False, "❌ Face Recognition: Corrupted detection data"
-    except Exception as e:
-        print(f"Error reading face recognition JSON: {e}")
-        return False, f"❌ Face Recognition: Error reading data"
-    
-    return False, None
-
-def get_face_recognition_status():
-    """Get current face recognition status with detailed information"""
-    if os.path.exists(RECOGNIZED_ID_FILE):
-        try:
-            with open(RECOGNIZED_ID_FILE, 'r') as f:
-                data = json.load(f)
-                emp_id = data.get('employee_id', 'Unknown')
-                name = data.get('name', 'Unknown')
-                timestamp = data.get('timestamp', '')
-                status = data.get('status', 'Unknown')
-                
-                if timestamp:
-                    try:
-                        # Parse timestamp and show time
-                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                        time_str = dt.strftime('%H:%M:%S')
-                        return f"🟢 Active - {name} ({emp_id}) at {time_str} - {status}"
-                    except:
-                        return f"🟢 Active - {name} ({emp_id}) - {status}"
-                else:
-                    return f"🟢 Active - {name} ({emp_id}) - {status}"
-        except Exception as e:
-            return "🟡 Connected - JSON file exists but has errors"
-    else:
-        return "🔴 Not Connected - Start face recognition app"
-
-# Simulate face detection (since we can't use camera in Streamlit)
-def simulate_face_detection():
-    """Simulate face detection with actual employee IDs from CSV"""
-    # Load actual employee data
-    emp_file = os.path.join(os.path.dirname(BASE_DIR), 'face_recognition_app', 'shared', 'employees_data.csv')
-    employees = []
-    names = []
-    
-    try:
-        if os.path.exists(emp_file):
-            df = pd.read_csv(emp_file)
-            employees = df['Employee ID'].tolist()
-            names = df['Name'].tolist()
-        else:
-            # Fallback to default data
-            employees = ["MSN001", "MSN002", "MSN003", "MSN004", "MSN005"]
-            names = ["Ramsha Tariq", "Tehreem Siddiqui", "Rayyan Ahmad", "Maryam Sheikh", "Samreen Fatima"]
-    except:
-        # Fallback to default data
-        employees = ["MSN001", "MSN002", "MSN003", "MSN004", "MSN005"]
-        names = ["Ramsha Tariq", "Tehreem Siddiqui", "Rayyan Ahmad", "Maryam Sheikh", "Samreen Fatima"]
-    
-    # Simulate detection with actual employee IDs
-    if np.random.random() < 0.4:  # 40% chance of detection
-        # Select a random employee from the actual list
-        idx = np.random.randint(0, len(employees))
-        emp_id = employees[idx]
-        name = names[idx]
-        return {
-            "employee_id": emp_id,
-            "name": name,
-            "timestamp": datetime.now().isoformat(),
-            "status": "recognized",
-            "unique_id": f"{emp_id}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-        }
-    return None
-
 # Load employee data
 def load_employee_data():
     # First check if we have uploaded CSV data in session state
@@ -947,32 +825,7 @@ def main_dashboard():
         else:
             st.markdown("**🔴 Face Recognition:** Not Connected")
         
-        # Test button to create sample JSON data
-        if st.button("🧪 Create Test Data", type="secondary", use_container_width=True, key="test_data_button"):
-            try:
-                # Create test JSON data
-                test_data = [{
-                    "employee_id": "MSN001",
-                    "name": "Ramsha Tariq",
-                    "timestamp": datetime.now().isoformat(),
-                    "status": "recognized",
-                    "unique_id": f"MSN001_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
-                    "date": datetime.now().strftime("%d/%m/%Y"),
-                    "time": datetime.now().strftime("%H:%M:%S"),
-                    "attendance_status": "Present"
-                }]
-                
-                # Write test data to JSON file
-                with open(RECOGNIZED_ID_FILE, 'w') as f:
-                    json.dump(test_data, f, indent=2)
-                
-                st.session_state.last_notification = "✅ Test data created - Click REFRESH to process"
-                st.session_state.notification_type = "success"
-                st.rerun()
-            except Exception as e:
-                st.session_state.last_notification = f"❌ Error creating test data: {str(e)}"
-                st.session_state.notification_type = "error"
-                st.rerun()
+       
         
         # Display notification if exists
         if st.session_state.last_notification is not None:
@@ -983,30 +836,6 @@ def main_dashboard():
             elif st.session_state.notification_type == "info":
                 st.info(st.session_state.last_notification)
         
-        # Show JSON file status
-        json_status = check_json_file_status()
-        if json_status["exists"]:
-            if json_status["size"] > 0:
-                st.markdown("""
-                <div style="background-color: #FF9800; color: white; padding: 10px; border-radius: 8px; margin: 5px 0; border: 2px solid #F57C00;">
-                    <h5 style="margin: 0; color: white;">📄 JSON File Status</h5>
-                    <p style="margin: 3px 0 0 0; color: white;">✅ Face recognition data available - Click REFRESH to process</p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div style="background-color: #2196F3; color: white; padding: 10px; border-radius: 8px; margin: 5px 0; border: 2px solid #1976D2;">
-                    <h5 style="margin: 0; color: white;">📄 JSON File Status</h5>
-                    <p style="margin: 3px 0 0 0; color: white;">⏳ Waiting for face recognition data</p>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div style="background-color: #9E9E9E; color: white; padding: 10px; border-radius: 8px; margin: 5px 0; border: 2px solid #757575;">
-                <h5 style="margin: 0; color: white;">📄 JSON File Status</h5>
-                <p style="margin: 3px 0 0 0; color: white;">🔴 Face recognition app not connected</p>
-            </div>
-            """, unsafe_allow_html=True)
         
         # CSV upload
         st.markdown("### 📁 Upload Employee CSV")
